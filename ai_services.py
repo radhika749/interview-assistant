@@ -12,19 +12,28 @@ client = genai.Client(
 )
 
 
-# ---------------- GENERATE QUESTION ----------------
+# ---------- START INTERVIEW ----------
 
-def generate_question(topic: str, difficulty: str):
+def start_interview(role: str, difficulty: str):
 
     prompt = f"""
-    You are an interview preparation assistant.
+    You are a professional but friendly technical interviewer.
 
-    Generate ONE {difficulty} level interview question
-    about {topic}.
+    Start a realistic interview for a candidate applying for:
+    Role: {role}
 
-    The question should be suitable for a job interview.
+    Difficulty: {difficulty}
 
-    Return only the interview question.
+    Ask the first interview question.
+
+    Rules:
+    - Start with a simple introduction.
+    - Ask only ONE question.
+    - Do not give the answer.
+    - Keep the question clear and natural.
+    - Do not evaluate the candidate yet.
+
+    Return only the message you would say to the candidate.
     """
 
     response = client.models.generate_content(
@@ -35,40 +44,96 @@ def generate_question(topic: str, difficulty: str):
     return response.text
 
 
-# ---------------- EVALUATE ANSWER ----------------
+# ---------- CONTINUE INTERVIEW ----------
 
-def evaluate_answer(topic: str, question: str, answer: str):
+def continue_interview(
+    role: str,
+    difficulty: str,
+    conversation: list
+):
 
     prompt = f"""
-    You are a friendly interview preparation teacher.
+    You are conducting a realistic technical interview.
 
-    The candidate is a beginner.
+    Candidate role:
+    {role}
 
-    Topic: {topic}
+    Interview difficulty:
+    {difficulty}
 
-    Question: {question}
+    Previous conversation:
+    {json.dumps(conversation)}
 
-    Candidate Answer: {answer}
+    Continue the interview naturally.
 
-    Evaluate the answer.
+    Your job is to:
+    - Understand the candidate's latest answer.
+    - Decide what should be asked next.
+    - Ask a relevant follow-up question when appropriate.
+    - If the answer is weak, ask a simpler question or clarify the concept.
+    - If the answer is strong, ask a slightly deeper question.
+    - Stay focused on the candidate's role.
+    - Do not give the candidate the answer.
+    - Do not give a score during the interview.
+    - Ask ONLY ONE question at a time.
+    - Speak like a real interviewer.
+
+    Return only the next interviewer message.
+    """
+
+    response = client.models.generate_content(
+        model="gemini-3.5-flash-lite",
+        contents=prompt
+    )
+
+    return response.text
+
+
+# ---------- FINAL INTERVIEW REVIEW ----------
+
+def generate_final_review(
+    role: str,
+    conversation: list
+):
+
+    prompt = f"""
+    You are an interview evaluator.
+
+    Candidate role:
+    {role}
+
+    Complete interview conversation:
+    {json.dumps(conversation)}
+
+    Give the candidate a final interview review.
 
     Return ONLY valid JSON in exactly this format:
 
     {{
-        "score": 6,
-        "correct": "What the candidate got right",
-        "missing": "What the candidate missed",
-        "explanation": "Simple explanation of what they need to learn",
-        "improved_answer": "A short and easy interview answer",
-        "memory_trick": "An easy way to remember it"
+        "overall_score": 7,
+        "technical_knowledge": 7,
+        "communication": 7,
+        "strengths": [
+            "strength 1",
+            "strength 2"
+        ],
+        "weak_areas": [
+            "weak area 1",
+            "weak area 2"
+        ],
+        "what_to_improve": [
+            "improvement 1",
+            "improvement 2"
+        ],
+        "final_feedback": "Short and simple overall feedback"
     }}
 
     Rules:
-    - score must be a number from 0 to 10.
-    - Use very simple English.
-    - Keep explanations short.
-    - Do not use Markdown.
-    - Do not add anything before or after the JSON.
+    - Scores must be numbers from 0 to 10.
+    - Use simple English.
+    - Be honest but encouraging.
+    - Focus on the actual answers given by the candidate.
+    - Do not invent information.
     """
 
     response = client.models.generate_content(

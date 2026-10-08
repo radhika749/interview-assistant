@@ -2,63 +2,70 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import uuid
 
-from ai_services import generate_question, evaluate_answer
+from ai_services import (
+    start_interview,
+    continue_interview,
+    generate_final_review
+)
 
 
 app = FastAPI()
 
 
-# Temporary storage
+# Temporary interview session storage
 sessions = {}
 
 
 @app.get("/")
 def home():
     return {
-        "message": "Interview Assistant API is running"
+        "message": "AI Interview Assistant is running"
     }
 
 
 # ---------- START INTERVIEW ----------
 
-class InterviewStartRequest(BaseModel):
-    topic: str
+class StartInterviewRequest(BaseModel):
+    role: str
     difficulty: str
 
 
 @app.post("/interview/start")
-def start_interview(data: InterviewStartRequest):
+def start(data: StartInterviewRequest):
 
     session_id = str(uuid.uuid4())
 
-    question = generate_question(
-        data.topic,
+    first_message = start_interview(
+        data.role,
         data.difficulty
     )
 
     sessions[session_id] = {
-        "topic": data.topic,
+        "role": data.role,
         "difficulty": data.difficulty,
-        "question": question
+        "conversation": [
+            {
+                "speaker": "interviewer",
+                "message": first_message
+            }
+        ]
     }
 
     return {
         "session_id": session_id,
-        "topic": data.topic,
-        "difficulty": data.difficulty,
-        "question": question
+        "message": first_message
     }
 
 
-# ---------- SUBMIT ANSWER ----------
+# ---------- ANSWER INTERVIEW QUESTION ----------
 
-class AnswerRequest(BaseModel):
+class InterviewAnswerRequest(BaseModel):
     session_id: str
     answer: str
 
 
-@app.post("/interview/answer")
-def submit_answer(data: AnswerRequest):
+@app.post("/interview/respond")
+def respond(data: InterviewAnswerRequest):
 
     session = sessions.get(data.session_id)
 
@@ -67,14 +74,51 @@ def submit_answer(data: AnswerRequest):
             "error": "Invalid session ID"
         }
 
-    evaluation = evaluate_answer(
-        session["topic"],
-        session["question"],
-        data.answer
+    # Save candidate's answer
+    session["conversation"].append({
+        "speaker": "candidate",
+        "message": data.answer
+    })
+
+    # Ask AI what should come next
+    next_message = continue_interview(
+        session["role"],
+        session["difficulty"],
+        session["conversation"]
+    )
+
+    # Save AI response
+    session["conversation"].append({
+        "speaker": "interviewer",
+        "message": next_message
+    })
+
+    return {
+        "message": next_message
+    }
+
+
+# ---------- END INTERVIEW ----------
+
+class EndInterviewRequest(BaseModel):
+    session_id: str
+
+
+@app.post("/interview/end")
+def end_interview(data: EndInterviewRequest):
+
+    session = sessions.get(data.session_id)
+
+    if session is None:
+        return {
+            "error": "Invalid session ID"
+        }
+
+    review = generate_final_review(
+        session["role"],
+        session["conversation"]
     )
 
     return {
-        "question": session["question"],
-        "answer": data.answer,
-        "evaluation": evaluation
+        "review": review
     }
