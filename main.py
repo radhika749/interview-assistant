@@ -81,11 +81,20 @@ def respond(data: InterviewAnswerRequest):
     })
 
     # Ask AI what should come next
-    next_message = continue_interview(
+    try:
+        next_message = continue_interview(
         session["role"],
         session["difficulty"],
         session["conversation"]
     )
+
+    except RuntimeError:
+       return {
+        "error": (
+            "The AI service is temporarily unavailable. "
+            "Your answer has been saved. Please try again shortly."
+        )
+    }
 
     # Save AI response
     session["conversation"].append({

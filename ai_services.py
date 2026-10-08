@@ -1,9 +1,10 @@
 import os
 import json
+import time
 
 from dotenv import load_dotenv
 from google import genai
-
+from google.genai import errors
 
 load_dotenv()
 
@@ -51,42 +52,47 @@ def continue_interview(
     difficulty: str,
     conversation: list
 ):
-
     prompt = f"""
     You are conducting a realistic technical interview.
 
-    Candidate role:
-    {role}
+    Candidate role: {role}
+    Difficulty: {difficulty}
 
-    Interview difficulty:
-    {difficulty}
-
-    Previous conversation:
+    Conversation so far:
     {json.dumps(conversation)}
 
     Continue the interview naturally.
-
-    Your job is to:
     - Understand the candidate's latest answer.
-    - Decide what should be asked next.
-    - Ask a relevant follow-up question when appropriate.
-    - If the answer is weak, ask a simpler question or clarify the concept.
-    - If the answer is strong, ask a slightly deeper question.
-    - Stay focused on the candidate's role.
-    - Do not give the candidate the answer.
+    - Ask a relevant follow-up or a new question.
+    - Ask only ONE question at a time.
+    - Use simple, clear language.
+    - Do not reveal the answer.
     - Do not give a score during the interview.
-    - Ask ONLY ONE question at a time.
-    - Speak like a real interviewer.
 
     Return only the next interviewer message.
     """
 
-    response = client.models.generate_content(
-        model="gemini-3.5-flash-lite",
-        contents=prompt
-    )
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model="gemini-3.5-flash-lite",
+                contents=prompt
+            )
 
-    return response.text
+            if response.text:
+                return response.text
+
+            return "I couldn't generate the next question. Please try again."
+
+        except errors.APIError as error:
+            print(f"Gemini API error: {error}")
+
+            if attempt < 2:
+                time.sleep(2 * (attempt + 1))
+
+    raise RuntimeError(
+        "Gemini is temporarily unavailable. Please try again later."
+    )
 
 
 # ---------- FINAL INTERVIEW REVIEW ----------
