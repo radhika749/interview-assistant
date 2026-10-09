@@ -1,3 +1,4 @@
+
 import streamlit as st
 import requests
 
@@ -20,6 +21,9 @@ if "messages" not in st.session_state:
 
 if "interview_started" not in st.session_state:
     st.session_state.interview_started = False
+
+if "review" not in st.session_state:
+    st.session_state.review = None
 
 
 # Sidebar settings
@@ -51,13 +55,16 @@ with st.sidebar:
             result = response.json()
 
             st.session_state.session_id = result["session_id"]
+
             st.session_state.messages = [
                 {
                     "role": "assistant",
                     "content": result["message"]
                 }
             ]
+
             st.session_state.interview_started = True
+            st.session_state.review = None
 
             st.rerun()
 
@@ -73,6 +80,7 @@ for message in st.session_state.messages:
 
 # Chat input
 if st.session_state.interview_started:
+
     answer = st.chat_input("Type your answer here...")
 
     if answer:
@@ -100,6 +108,22 @@ if st.session_state.interview_started:
 
             if "error" in result:
                 st.error(result["error"])
+
+            elif result.get("status") == "completed":
+
+                st.session_state.interview_started = False
+                st.session_state.review = result.get("review", {})
+
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": result.get(
+                        "message",
+                        "Interview completed!"
+                    )
+                })
+
+                st.rerun()
+
             else:
                 next_message = result["message"]
 
@@ -108,8 +132,53 @@ if st.session_state.interview_started:
                     "content": next_message
                 })
 
-                with st.chat_message("assistant"):
-                    st.write(next_message)
+                st.rerun()
 
         except requests.RequestException as error:
             st.error(f"Could not send your answer: {error}")
+
+
+# Display final interview report
+if st.session_state.review:
+    review = st.session_state.review
+
+    st.divider()
+    st.header("📊 Your Interview Report")
+
+    st.metric(
+        "Overall Score",
+        f'{review.get("overall_score", 0)}/10'
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.metric(
+            "Technical Knowledge",
+            f'{review.get("technical_knowledge", 0)}/10'
+        )
+
+    with col2:
+        st.metric(
+            "Communication",
+            f'{review.get("communication", 0)}/10'
+        )
+
+    st.subheader("💪 Strengths")
+
+    for item in review.get("strengths", []):
+        st.write(f"• {item}")
+
+    st.subheader("📚 Areas to Improve")
+
+    for item in review.get("weak_areas", []):
+        st.write(f"• {item}")
+
+    st.subheader("🎯 Improvement Suggestions")
+
+    for item in review.get("what_to_improve", []):
+        st.write(f"• {item}")
+
+    st.subheader("💬 Final Feedback")
+    st.write(review.get("final_feedback", "No feedback available."))
+
